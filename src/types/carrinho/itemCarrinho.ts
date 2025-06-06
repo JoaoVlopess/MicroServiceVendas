@@ -1,4 +1,4 @@
 type ItemCarrinho = {
-  idProduto: number; // Ou o ID do produto, se preferir buscar os detalhes depois
+  idProduto: number; 
   quantidade: number;
 };

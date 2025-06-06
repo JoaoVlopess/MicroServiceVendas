@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { RowDataPacket } from 'mysql2';
 import { pool } from '../database';
 import type { ProdutoBase } from '../types/produtos/produtoBase';
-// import { pool } from '../db'; // Descomente e ajuste o caminho para seu arquivo de conexão com o BD
+
 
 // @route   GET /api/produtos
 // @desc    Lista todos os produtos disponíveis
@@ -22,5 +22,65 @@ export const listarProdutos = async (req: Request, res: Response, next: NextFunc
   } catch (err: any) {
     console.error("Erro ao buscar todos os produtos:", err);
     next(err); // Passa o erro para o próximo middleware de erro
+  }
+};
+
+// @route   GET /api/produtos/:id
+// @desc    Obtém um produto específico pelo seu ID
+// @access  Public
+export const obterProdutoPorId = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const { id } = req.params; // Pega o ID da URL
+
+  try {
+    const [rows] = await pool.execute<RowDataPacket[] & ProdutoBase[]>(
+      `SELECT id, nome, preco, tipo, descricao FROM produto WHERE id = ?`,
+      [id] // Passa o ID como parâmetro para a query, prevenindo SQL Injection
+    );
+
+    const produto = rows[0]; // O resultado da query (se houver) estará na primeira posição
+
+    if (!produto) {
+      res.status(404).json({ success: false, message: 'Produto não encontrado' });
+      return;
+    }
+
+    res.status(200).json({ success: true, data: produto });
+  } catch (err: any) {
+    console.error(`Erro ao buscar produto com ID ${id}:`, err);
+    next(err);
+  }
+};
+
+// @route   POST /api/produtos
+// @desc    Cria um novo produto
+// @access  Private (geralmente requer autenticação de admin/vendedor)
+export const criarProduto = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const { nome, preco, tipo, descricao } = req.body as ProdutoBase; // Use o tipo ProdutoBase para tipar o corpo
+
+  // Validação básica
+  if (!nome || preco === undefined || preco === null || !tipo) {
+    res.status(400).json({ success: false, message: 'Nome, preço e tipo são campos obrigatórios.' });
+    return;
+  }
+
+  try {
+    // Executa a query de inserção
+    // O banco de dados deve gerar o ID automaticamente
+    const [result] = await pool.execute(
+      `INSERT INTO produto (nome, preco, tipo, descricao) VALUES (?, ?, ?, ?)`,
+      [nome, preco, tipo, descricao]
+    );
+
+    // O 'insertId' está disponível no resultado para inserções
+    const insertId = (result as any).insertId;
+
+    // Retorna o produto criado (ou apenas o ID)
+    res.status(201).json({ success: true, message: 'Produto criado com sucesso!', data: { id: insertId, nome, preco, tipo, descricao } });
+
+  } catch (err: any) {
+    console.error("Erro ao criar produto:", err);
+    // Se for um erro de validação do BD (ex: tipo inválido), pode tratar diferente
+    // if (err.code === 'ER_BAD_FIELD_ERROR') { ... }
+    next(err); // Passa o erro para o middleware de tratamento de erros
   }
 };
