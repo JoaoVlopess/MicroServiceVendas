@@ -1,4 +1,4 @@
-type ProdutoBase = {
+export type ProdutoBase = {
   id: number;
   nome: string;
   preco: number;
