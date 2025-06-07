@@ -13,9 +13,8 @@ export const listarProdutos = async (req: Request, res: Response, next: NextFunc
   try {
     // Substitua o mock pela lógica do banco de dados:
     const [rows] = await pool.execute<RowDataPacket[] & ProdutoBase[]>(
-      `SELECT id, nome, preco, tipo, descricao FROM produto ORDER BY nome ASC`
+      `SELECT id, nome, preco, tipo, descricao FROM ProdutoBase ORDER BY nome ASC`
     );
-    // res.status(200).json({ success: true, data: rows });
 
     // Por enquanto, mantendo o mock para o código funcionar sem o BD configurado:
     res.status(200).json({ success: true, data: rows });
@@ -33,7 +32,7 @@ export const obterProdutoPorId = async (req: Request, res: Response, next: NextF
 
   try {
     const [rows] = await pool.execute<RowDataPacket[] & ProdutoBase[]>(
-      `SELECT id, nome, preco, tipo, descricao FROM produto WHERE id = ?`,
+      `SELECT id, nome, preco, tipo, descricao FROM ProdutoBase WHERE id = ?`,
       [id] // Passa o ID como parâmetro para a query, prevenindo SQL Injection
     );
 
@@ -67,7 +66,7 @@ export const criarProduto = async (req: Request, res: Response, next: NextFuncti
     // Executa a query de inserção
     // O banco de dados deve gerar o ID automaticamente
     const [result] = await pool.execute(
-      `INSERT INTO produto (nome, preco, tipo, descricao) VALUES (?, ?, ?, ?)`,
+      `INSERT INTO ProdutoBase (nome, preco, tipo, descricao) VALUES (?, ?, ?, ?)`,
       [nome, preco, tipo, descricao]
     );
 

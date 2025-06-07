@@ -1,4 +1,6 @@
-type Carrinho = {
+import { ItemCarrinho } from "./itemCarrinho";
+
+export type Carrinho = {
   idUsuario: number; 
   itens: ItemCarrinho[];    
   dataCriacao?: Date;         
