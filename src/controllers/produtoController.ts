@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { RowDataPacket } from 'mysql2';
 import { pool } from '../database';
+import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import type { ProdutoBase } from '../types/produtos/produtoBase';
 
 
@@ -54,32 +54,64 @@ export const obterProdutoPorId = async (req: Request, res: Response, next: NextF
 // @desc    Cria um novo produto
 // @access  Private (geralmente requer autenticação de admin/vendedor)
 export const criarProduto = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const { nome, preco, tipo, descricao } = req.body as ProdutoBase; // Use o tipo ProdutoBase para tipar o corpo
-
-  // Validação básica
-  if (!nome || preco === undefined || preco === null || !tipo) {
-    res.status(400).json({ success: false, message: 'Nome, preço e tipo são campos obrigatórios.' });
-    return;
-  }
-
+  const connection = await pool.getConnection(); // Obter uma conexão para usar transação
   try {
+    const { nome, preco, tipo, descricao } = req.body as ProdutoBase;
+
+    // Validação básica
+    if (!nome || preco === undefined || preco === null || !tipo) {
+      res.status(400).json({ success: false, message: 'Nome, preço e tipo são campos obrigatórios.' });
+      return;
+    }
+    if (!['REMEDIO', 'BRINQUEDO', 'RACAO'].includes(tipo)) {
+        res.status(400).json({ success: false, message: 'Tipo de produto inválido.' });
+        return;
+    }
+
+    await connection.beginTransaction(); // Iniciar transação
+
     // Executa a query de inserção
     // O banco de dados deve gerar o ID automaticamente
-    const [result] = await pool.execute(
+    const [resultBase] = await connection.execute<ResultSetHeader>(
       `INSERT INTO ProdutoBase (nome, preco, tipo, descricao) VALUES (?, ?, ?, ?)`,
       [nome, preco, tipo, descricao]
     );
 
     // O 'insertId' está disponível no resultado para inserções
-    const insertId = (result as any).insertId;
+    const idProdutoBase = resultBase.insertId;
+
+    // Inserir na tabela específica baseada no tipo
+    switch (tipo) {
+        case 'REMEDIO':
+            await connection.execute(
+                'INSERT INTO Remedio (id_produto_base) VALUES (?)',
+                [idProdutoBase]
+            );
+            break;
+        case 'RACAO':
+            await connection.execute(
+                'INSERT INTO Racao (id_produto_base) VALUES (?)',
+                [idProdutoBase]
+            );
+            break;
+        case 'BRINQUEDO':
+            await connection.execute(
+                'INSERT INTO Brinquedo (id_produto_base) VALUES (?)',
+                [idProdutoBase]
+            );
+            break;
+    }
+
+    await connection.commit(); // Confirmar transação
 
     // Retorna o produto criado (ou apenas o ID)
-    res.status(201).json({ success: true, message: 'Produto criado com sucesso!', data: { id: insertId, nome, preco, tipo, descricao } });
+    res.status(201).json({ success: true, message: `Produto do tipo ${tipo} criado com sucesso!`, data: { id: idProdutoBase, nome, preco, tipo, descricao } });
 
   } catch (err: any) {
+    if (connection) await connection.rollback(); // Reverter transação em caso de erro
     console.error("Erro ao criar produto:", err);
-    // Se for um erro de validação do BD (ex: tipo inválido), pode tratar diferente
-    // if (err.code === 'ER_BAD_FIELD_ERROR') { ... }
     next(err); // Passa o erro para o middleware de tratamento de erros
+  } finally {
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 };
