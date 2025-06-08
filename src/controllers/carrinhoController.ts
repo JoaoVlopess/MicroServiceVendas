@@ -7,18 +7,57 @@ import type { ProdutoBase } from '../types/produtos/produtoBase'; // Assumindo q
 
 // Função auxiliar para calcular e atualizar o total do carrinho
 async function atualizarTotalCarrinho(idCarrinho: number): Promise<number> {
-  const [itensResult] = await pool.execute<RowDataPacket[] & { quantidade: number; preco_unitario_no_momento_da_adicao: number }[]>(
-    `SELECT quantidade, preco_unitario_no_momento_da_adicao FROM ItensCarrinho WHERE id_carrinho = ?`,
+  const [itensResult] = await pool.execute<RowDataPacket[] & { quantidade: number; preco: number }[]>(
+    `SELECT ic.quantidade, pb.preco 
+     FROM ItemCarrinho ic
+     JOIN ProdutoBase pb ON ic.idProduto = pb.id
+     WHERE ic.idCarrinho = ?`,
     [idCarrinho]
   );
 
-  const novoTotal = itensResult.reduce((sum, item) => sum + (item.quantidade * item.preco_unitario_no_momento_da_adicao), 0);
+  const novoTotal = itensResult.reduce((sum, item) => sum + (item.quantidade * item.preco), 0);
 
   await pool.execute(
-    `UPDATE Carrinhos SET total = ?, data_ultima_modificacao = NOW() WHERE id = ?`,
+    `UPDATE Carrinho SET total = ?, dataUltimaModificacao = NOW() WHERE idCarrinho = ?`,
     [novoTotal, idCarrinho]
   );
   return novoTotal;
+}
+
+// Função auxiliar para buscar e formatar os detalhes completos do carrinho
+async function obterDetalhesCarrinhoFormatado(idCarrinho: number): Promise<{ carrinho: Carrinho | null, itens: (ItemCarrinho & { nome: string; preco: number })[] }> {
+  const [carrinhoRows] = await pool.execute<RowDataPacket[] & Carrinho[]>(
+    `SELECT idCarrinho, idUsuario, total, dataCriacao, dataUltimaModificacao 
+     FROM Carrinho WHERE idCarrinho = ?`,
+    [idCarrinho]
+  );
+
+  if (carrinhoRows.length === 0) {
+    return { carrinho: null, itens: [] };
+  }
+  const carrinho = carrinhoRows[0];
+
+  const [itensDB] = await pool.execute<RowDataPacket[] & { idProduto: number; quantidade: number; preco: number; nome_produto: string; }[]>(
+    `SELECT
+        ic.idProduto as idProduto,
+
+       ic.quantidade, 
+       pb.preco as preco,
+       pb.nome as nome_produto
+     FROM ItemCarrinho ic -- ic.idProduto está correto conforme sua DDL de ItemCarrinho
+     JOIN ProdutoBase pb ON ic.idProduto = pb.id 
+     WHERE ic.idCarrinho = ?`,
+    [idCarrinho]
+  );
+
+  const itensFormatados = itensDB.map(item => ({
+    idProduto: item.idProduto,
+    quantidade: item.quantidade,
+    nome: item.nome_produto,
+      preco: item.preco, // Este é o pb.preco
+  }));
+
+  return { carrinho, itens: itensFormatados };
 }
 
 // @route   GET /carrinho
@@ -28,40 +67,29 @@ export const listarProdutosDoCarrinho = async (req: Request, res: Response, next
   const { idCliente } = req.params;
 
   try {
-    const [carrinhos] = await pool.execute<RowDataPacket[] & Carrinho[]>(
-      `SELECT id as idCarrinho, id_cliente as idUsuario, total, data_criacao, data_ultima_modificacao 
-       FROM Carrinhos WHERE id_cliente = ?`,
+    const [carrinhosResult] = await pool.execute<RowDataPacket[] & { idCarrinho: number }[]>(
+      `SELECT idCarrinho FROM Carrinho WHERE idUsuario = ?`,
       [idCliente]
     );
 
-    if (carrinhos.length === 0) {
-      res.status(200).json({ success: true, message: 'Carrinho vazio ou não encontrado para este cliente.', data: { idUsuario: parseInt(idCliente), itens: [], total: 0 } });
+    if (carrinhosResult.length === 0) {
+      res.status(200).json({
+        success: true,
+        message: 'Carrinho vazio ou não encontrado para este cliente.',
+        data: { idUsuario: parseInt(idCliente), itens: [], total: 0, idCarrinho: null, data_criacao: null, data_ultima_modificacao: null }
+      });
       return;
     }
 
-    const carrinho = carrinhos[0];
+    const idCarrinho = carrinhosResult[0].idCarrinho;
 
-    const [itensDB] = await pool.execute<RowDataPacket[] & { id_produto: number; quantidade: number; preco_unitario_no_momento_da_adicao: number; nome_produto: string; }[]>(
-      `SELECT 
-         ic.id_produto as idProduto, 
-         ic.quantidade, 
-         ic.preco_unitario_no_momento_da_adicao as preco, 
-         pb.nome 
-       FROM ItensCarrinho ic
-       JOIN ProdutoBase pb ON ic.id_produto = pb.id
-       WHERE ic.id_carrinho = ?`,
-      [carrinho.idCarrinho]
-    );
-    
-    // Mapeia para o formato ItemCarrinho da resposta, que inclui nome e preço
-    const itensFormatados: (ItemCarrinho & { nome: string; preco: number })[] = itensDB.map(item => ({
-        idProduto: item.idProduto,
-        quantidade: item.quantidade,
-        nome: item.nome_produto,
-        preco: item.preco_unitario_no_momento_da_adicao,
-    }));
+    const { carrinho, itens } = await obterDetalhesCarrinhoFormatado(idCarrinho);
 
-    res.status(200).json({ success: true, data: { ...carrinho, itens: itensFormatados } });
+    if (!carrinho) { // Segurança, embora improvável se carrinhosResult tinha um ID
+      res.status(404).json({ success: false, message: 'Carrinho não encontrado após verificação inicial.' });
+      return;
+    }
+    res.status(200).json({ success: true, data: { ...carrinho, itens } });
   } catch (err: any) {
     console.error("Erro ao buscar produtos do carrinho:", err);
     next(err); // Passa o erro para o próximo middleware de erro
@@ -87,7 +115,8 @@ export const adicionarProdutoAoCarrinho = async (req: Request, res: Response, ne
 
     // 1. Buscar informações do produto no banco de dados
     const [rows] = await pool.execute<RowDataPacket[] & ProdutoBase[]>(
-      `SELECT id, preco FROM ProdutoBase WHERE id = ?`, // Apenas o preço é necessário aqui
+      // Selecionar todos os campos para alinhar com o tipo ProdutoBase, assumindo que ProdutoBase.id é a PK
+      `SELECT id, nome, preco, tipo, descricao FROM ProdutoBase WHERE id = ?`,
       [idProduto]
     );
 
@@ -101,59 +130,119 @@ export const adicionarProdutoAoCarrinho = async (req: Request, res: Response, ne
 
     // 2. Encontrar ou criar o carrinho para o cliente
     let idCarrinho: number;
-    const [carrinhos] = await pool.execute<RowDataPacket[] & { id: number }[]>(
-      `SELECT id FROM Carrinhos WHERE id_cliente = ?`,
+    const [carrinhosResult] = await pool.execute<RowDataPacket[] & { idCarrinho: number }[]>(
+      `SELECT idCarrinho FROM Carrinho WHERE idUsuario = ?`,
       [idCliente]
     );
 
-    if (carrinhos.length > 0) {
-      idCarrinho = carrinhos[0].id;
+    if (carrinhosResult.length > 0) {
+      idCarrinho = carrinhosResult[0].idCarrinho;
+
     } else {
-      const [result] = await pool.execute<ResultSetHeader>(
-        `INSERT INTO Carrinhos (id_cliente, data_criacao, data_ultima_modificacao, total) VALUES (?, NOW(), NOW(), 0)`,
+      // Criar um novo carrinho
+      const [insertResult] = await pool.execute<ResultSetHeader>(
+        `INSERT INTO Carrinho (idUsuario, dataCriacao, dataUltimaModificacao, total) VALUES (?, NOW(), NOW(), 0)`,
         [idCliente]
       );
-      idCarrinho = result.insertId;
+      idCarrinho = insertResult.insertId;
     }
 
     // 3. Adicionar ou atualizar o item no carrinho
     // Usamos INSERT ... ON DUPLICATE KEY UPDATE para simplificar
     await pool.execute(
-      `INSERT INTO ItensCarrinho (id_carrinho, id_produto, quantidade, preco_unitario_no_momento_da_adicao) 
-       VALUES (?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE quantidade = quantidade + VALUES(quantidade), preco_unitario_no_momento_da_adicao = VALUES(preco_unitario_no_momento_da_adicao)`,
-      [idCarrinho, idProduto, quantidade, precoProdutoNoMomento]
+      `INSERT INTO ItemCarrinho (idCarrinho, idProduto, quantidade)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE quantidade = quantidade + VALUES(quantidade)`,
+      [idCarrinho, idProduto, quantidade]
     );
 
     // 4. Atualizar o total do carrinho
     await atualizarTotalCarrinho(idCarrinho);
 
     // 5. Buscar o carrinho atualizado para retornar na resposta
-    const [carrinhoAtualizadoRows] = await pool.execute<RowDataPacket[] & Carrinho[]>(
-        `SELECT id as idCarrinho, id_cliente as idUsuario, total, data_criacao, data_ultima_modificacao 
-         FROM Carrinhos WHERE id = ?`,
-        [idCarrinho]
-      );
-    const carrinhoAtualizado = carrinhoAtualizadoRows[0];
+    const { carrinho: carrinhoAtualizado, itens: itensFormatados } = await obterDetalhesCarrinhoFormatado(idCarrinho);
 
-    const [itensDB] = await pool.execute<RowDataPacket[] & { id_produto: number; quantidade: number; preco_unitario_no_momento_da_adicao: number; nome_produto: string; }[]>(
-        `SELECT ic.id_produto as idProduto, ic.quantidade, ic.preco_unitario_no_momento_da_adicao as preco, pb.nome as nome_produto
-         FROM ItensCarrinho ic
-         JOIN ProdutoBase pb ON ic.id_produto = pb.id
-         WHERE ic.id_carrinho = ?`,
-        [idCarrinho]
-    );
-    
-    const itensFormatados: (ItemCarrinho & { nome: string; preco: number })[] = itensDB.map(item => ({
-        idProduto: item.idProduto,
-        quantidade: item.quantidade,
-        nome: item.nome_produto,
-        preco: item.preco_unitario_no_momento_da_adicao,
-    }));
+    if (!carrinhoAtualizado) {
+      // Este caso não deveria acontecer se o carrinho acabou de ser criado/encontrado
+      res.status(500).json({ success: false, message: 'Erro ao buscar carrinho atualizado.' });
+      return;
+    }
 
     res.status(200).json({ success: true, message: 'Produto adicionado/atualizado no carrinho!', data: { ...carrinhoAtualizado, itens: itensFormatados } });
   } catch (err: any) {
     console.error("Erro ao adicionar produto ao carrinho:", err);
+    next(err);
+  }
+};
+
+// @route   POST /carrinho/remover
+// @desc    Remove um produto do carrinho ou diminui sua quantidade
+// @access  Private
+export const removerProdutoDoCarrinho = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { idCliente, idProduto, quantidade: quantidadeParaRemover } = req.body as { idCliente: number, idProduto: number, quantidade?: number };
+
+    if (idCliente === undefined || idProduto === undefined) {
+      res.status(400).json({ success: false, message: 'idCliente e idProduto são obrigatórios.' });
+      return;
+    }
+    if (quantidadeParaRemover !== undefined && (typeof quantidadeParaRemover !== 'number' || quantidadeParaRemover <= 0)) {
+      res.status(400).json({ success: false, message: 'Quantidade para remover deve ser um número positivo.' });
+      return;
+    }
+
+    // 1. Encontrar o carrinho do cliente
+    const [carrinhosResult] = await pool.execute<RowDataPacket[] & { idCarrinho: number }[]>(
+      `SELECT idCarrinho FROM Carrinho WHERE idUsuario = ?`,
+      [idCliente]
+    );
+
+    if (carrinhosResult.length === 0) {
+      res.status(404).json({ success: false, message: 'Carrinho não encontrado para este cliente.' });
+      return;
+    }
+    const idCarrinho = carrinhosResult[0].idCarrinho;
+
+
+    // 2. Verificar se o item existe no carrinho e obter sua quantidade atual
+    const [itensCarrinho] = await pool.execute<RowDataPacket[] & { quantidade: number }[]>(
+      `SELECT quantidade FROM ItemCarrinho WHERE idCarrinho = ? AND idProduto = ?`,
+      [idCarrinho, idProduto]
+    );
+
+    if (itensCarrinho.length === 0) {
+      res.status(404).json({ success: false, message: 'Produto não encontrado no carrinho.' });
+      return;
+    }
+    const quantidadeAtual = itensCarrinho[0].quantidade;
+
+    // 3. Lógica para remover ou atualizar a quantidade
+    if (quantidadeParaRemover === undefined || quantidadeParaRemover >= quantidadeAtual) {
+      // Remover o item completamente
+      await pool.execute(
+        `DELETE FROM ItemCarrinho WHERE idCarrinho = ? AND idProduto = ?`,
+        [idCarrinho, idProduto]
+      );
+    } else {
+      // Diminuir a quantidade
+      const novaQuantidade = quantidadeAtual - quantidadeParaRemover;
+      await pool.execute(
+        `UPDATE ItemCarrinho SET quantidade = ? WHERE idCarrinho = ? AND idProduto = ?`,
+        [novaQuantidade, idCarrinho, idProduto]
+      );
+    }
+
+    // 4. Atualizar o total do carrinho
+    await atualizarTotalCarrinho(idCarrinho);
+
+    // 5. Buscar o carrinho atualizado para retornar na resposta
+    const { carrinho: carrinhoAtualizado, itens: itensFormatados } = await obterDetalhesCarrinhoFormatado(idCarrinho);
+
+    // Mesmo que o carrinhoAtualizado seja null (improvável aqui), a estrutura da resposta será mantida
+    res.status(200).json({ success: true, message: 'Produto removido/atualizado do carrinho!', data: carrinhoAtualizado ? { ...carrinhoAtualizado, itens: itensFormatados } : null });
+
+  } catch (err: any) {
+    console.error("Erro ao remover produto do carrinho:", err);
     next(err);
   }
 };
