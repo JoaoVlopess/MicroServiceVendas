@@ -14,9 +14,15 @@ const allowedOriginsEnv = process.env.CORS_ALLOWED_ORIGINS;
 const localDefaultOrigin = 'http://localhost:5173'; // Para desenvolvimento local
 const railwayInternalDefaultOrigin = 'https://microservicevendas.railway.internal'; // URL interna do Railway
 
-const allowedOrigins = allowedOriginsEnv
-  ? allowedOriginsEnv.split(',').map(origin => origin.trim()) // Suporta múltiplas origens separadas por vírgula
-  : [localDefaultOrigin, railwayInternalDefaultOrigin]; // Padrões se CORS_ALLOWED_ORIGINS não estiver definida
+let calculatedOrigins = [localDefaultOrigin, railwayInternalDefaultOrigin];
+
+if (allowedOriginsEnv) {
+  const envOrigins = allowedOriginsEnv.split(',').map(origin => origin.trim());
+  // Adiciona as origens do ambiente à lista base, evitando duplicatas
+  calculatedOrigins = Array.from(new Set([...calculatedOrigins, ...envOrigins]));
+}
+// Se CORS_ALLOWED_ORIGINS não estiver definida, calculatedOrigins permanece [localDefaultOrigin, railwayInternalDefaultOrigin]
+const allowedOrigins = calculatedOrigins;
 
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
