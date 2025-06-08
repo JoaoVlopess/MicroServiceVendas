@@ -1,13 +1,12 @@
 {
   "name": "microservicevenda",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/server.js",
   "scripts": {
-    "dist": "tsup src",
+    "build": "tsup src/server.ts --out-dir dist --format cjs --clean --dts",
     "start": "node --import=tsx --watch ./src/server.ts",
-    "lint": "eslint src/*/.ts",
-    "start:dist": "npm run dist && node dist/src/server.ts",
-    "build": "tsc"
+    "lint": "eslint \"src/**/*.ts\"",
+    "start:dist": "npm run build && node dist/server.js"
   },
   "keywords": [],
   "author": "",

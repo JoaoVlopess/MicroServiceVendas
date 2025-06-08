@@ -1,8 +1,8 @@
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
-import routes from './routes'; // Importar o router principal
-import { SERVER_PORT } from '../config'; // Importar a porta do config
+import routes from './routes';
+import { SERVER_PORT as CONFIG_SERVER_PORT } from '../config'; // Importar e renomear para clareza
 import './database'; // Importar para garantir que a conexão seja testada na inicialização
 
 const server = express();
@@ -33,6 +33,9 @@ server.use((err: any, req: express.Request, res: express.Response, next: express
   });
 });
 
-server.listen(SERVER_PORT, () => { // Iniciar o servidor
-  console.log(`🚀 Servidor rodando na porta ${SERVER_PORT} em http://localhost:${SERVER_PORT}`);
+// Prioriza a porta do ambiente (ex: Railway), depois a do arquivo de config, e por último um padrão.
+const PORT = process.env.PORT || CONFIG_SERVER_PORT || 3000;
+
+server.listen(PORT, () => {
+  console.log(`🚀 Servidor rodando na porta ${PORT} em http://localhost:${PORT}`);
 });
