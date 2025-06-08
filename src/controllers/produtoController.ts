@@ -59,13 +59,13 @@ export const criarProduto = async (req: Request, res: Response, next: NextFuncti
     const { nome, preco, tipo, descricao } = req.body as ProdutoBase;
 
     // Validação básica
-    if (!nome || preco === undefined || preco === null || !tipo) {
-      res.status(400).json({ success: false, message: 'Nome, preço e tipo são campos obrigatórios.' });
+    if (!nome || typeof preco !== 'number' || preco < 0 || !tipo) {
+      res.status(400).json({ success: false, message: 'Nome, tipo e um preço válido (número não negativo) são campos obrigatórios.' });
       return;
     }
     if (!['REMEDIO', 'BRINQUEDO', 'RACAO'].includes(tipo)) {
-        res.status(400).json({ success: false, message: 'Tipo de produto inválido.' });
-        return;
+      res.status(400).json({ success: false, message: 'Tipo de produto inválido.' });
+      return;
     }
 
     await connection.beginTransaction(); // Iniciar transação
@@ -82,24 +82,24 @@ export const criarProduto = async (req: Request, res: Response, next: NextFuncti
 
     // Inserir na tabela específica baseada no tipo
     switch (tipo) {
-        case 'REMEDIO':
-            await connection.execute(
-                'INSERT INTO Remedio (id_produto_base) VALUES (?)',
-                [idProdutoBase]
-            );
-            break;
-        case 'RACAO':
-            await connection.execute(
-                'INSERT INTO Racao (id_produto_base) VALUES (?)',
-                [idProdutoBase]
-            );
-            break;
-        case 'BRINQUEDO':
-            await connection.execute(
-                'INSERT INTO Brinquedo (id_produto_base) VALUES (?)',
-                [idProdutoBase]
-            );
-            break;
+      case 'REMEDIO':
+        await connection.execute(
+          'INSERT INTO Remedio (id_produto_base) VALUES (?)',
+          [idProdutoBase]
+        );
+        break;
+      case 'RACAO':
+        await connection.execute(
+          'INSERT INTO Racao (id_produto_base) VALUES (?)',
+          [idProdutoBase]
+        );
+        break;
+      case 'BRINQUEDO':
+        await connection.execute(
+          'INSERT INTO Brinquedo (id_produto_base) VALUES (?)',
+          [idProdutoBase]
+        );
+        break;
     }
 
     await connection.commit(); // Confirmar transação

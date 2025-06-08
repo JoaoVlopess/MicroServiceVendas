@@ -76,7 +76,7 @@ export const listarProdutosDoCarrinho = async (req: Request, res: Response, next
       res.status(200).json({
         success: true,
         message: 'Carrinho vazio ou não encontrado para este cliente.',
-        data: { idUsuario: parseInt(idCliente), itens: [], total: 0, idCarrinho: null, data_criacao: null, data_ultima_modificacao: null }
+        data: { idUsuario: parseInt(idCliente), itens: [], total: 0, idCarrinho: null, dataCriacao: null, dataUltimaModificacao: null }
       });
       return;
     }
