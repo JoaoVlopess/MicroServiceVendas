@@ -10,8 +10,23 @@ const server = express();
 
 server.use(helmet());
 
+const allowedOriginsEnv = process.env.CORS_ALLOWED_ORIGINS;
+const localDefaultOrigin = 'http://localhost:5173'; // Para desenvolvimento local
+const railwayInternalDefaultOrigin = 'https://microservicevendas.railway.internal'; // URL interna do Railway
+
+const allowedOrigins = allowedOriginsEnv
+  ? allowedOriginsEnv.split(',').map(origin => origin.trim()) // Suporta múltiplas origens separadas por vírgula
+  : [localDefaultOrigin, railwayInternalDefaultOrigin]; // Padrões se CORS_ALLOWED_ORIGINS não estiver definida
+
 const corsOptions = {
-  origin: 'http://localhost:5173', 
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Permitir requisições sem 'origin' (ex: mobile apps, Postman, curl) ou se a origem estiver na lista de permitidas
+    if (!origin || allowedOrigins.indexOf(origin) !== -1 || (allowedOrigins.includes('*') && origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], 
   allowedHeaders: ['Content-Type', 'Authorization'], 
   optionsSuccessStatus: 200 
