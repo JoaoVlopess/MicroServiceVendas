@@ -72,23 +72,33 @@ const eurekaClient = new Eureka({
         // Se RAILWAY_PRIVATE_IP não estiver disponível (ex: local dev), usa 'localhost'.
         hostName: process.env.RAILWAY_PRIVATE_IP || 'localhost',
         ipAddr: process.env.RAILWAY_PRIVATE_IP || '127.0.0.1',
-        statusPageUrl: `http://${process.env.RAILWAY_PRIVATE_IP || 'localhost'}:${PORT}/info`, // Opcional
-        healthCheckUrl: `http://${process.env.RAILWAY_PRIVATE_IP || 'localhost'}:${PORT}/health`, // Opcional
+        
         port: {
             // A porta é dinamicamente atribuída pelo Railway (process.env.PORT) ou usa a SERVER_PORT definida
-            '$': parseInt(process.env.PORT || CONFIG_SERVER_PORT.toString(), 10),
+            '$': parseInt(process.env.PORT || (CONFIG_SERVER_PORT ? CONFIG_SERVER_PORT.toString() : '3000'), 10),
             '@enabled': true,
         },
         vipAddress: 'vendas-service', // Identificador do serviço
+        // Para o Railway, as URLs de status e health check devem usar o domínio público e HTTPS
+        // Se RAILWAY_PUBLIC_DOMAIN não estiver disponível (ex: dev local), usa localhost com HTTP e a porta da instância.
+        statusPageUrl: process.env.RAILWAY_PUBLIC_DOMAIN
+            ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/info`
+            : `http://localhost:${PORT}/info`,
+        healthCheckUrl: process.env.RAILWAY_PUBLIC_DOMAIN
+            ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/health`
+            : `http://localhost:${PORT}/health`,
         dataCenterInfo: {
             '@class': 'com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo',
             name: 'MyOwn', // Pode ser 'Default' ou 'MyOwn' para ambientes não-AWS. 'Amazon' se na AWS.
         },
     },
     eureka: {
-        host: process.env.EUREKA_HOST || 'localhost', // Host do Eureka Server (via env var)
-        port: parseInt(process.env.EUREKA_PORT || '8761', 10), // Porta do Eureka Server (via env var)
-        servicePath: process.env.EUREKA_SERVICE_PATH || '/eureka/apps/', // Caminho padrão do serviço Eureka
+       // Usa a URL completa do Eureka, que é mais robusto
+        serviceUrls: {
+            default: [ `${process.env.EUREKA_URL || 'http://localhost:8761'}/eureka/apps/` ]
+        },
+        // Informa ao cliente para usar o protocolo HTTPS se a URL começar com https
+        ssl: process.env.EUREKA_URL?.startsWith('https://'),
     },
 });
 
