@@ -54,7 +54,7 @@ async function obterDetalhesCarrinhoFormatado(idCarrinho: number): Promise<{ car
     idProduto: item.idProduto,
     quantidade: item.quantidade,
     nome: item.nome_produto,
-      preco: item.preco, // Este é o pb.preco
+    preco: item.preco, // Este é o pb.preco
   }));
 
   return { carrinho, itens: itensFormatados };
@@ -101,12 +101,20 @@ export const listarProdutosDoCarrinho = async (req: Request, res: Response, next
 // @access  Private
 export const adicionarProdutoAoCarrinho = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const idUsuarioLogado = req.headers['x-user-id'] as string | undefined;
+
     const { idCliente, idProduto, quantidade } = req.body as { idCliente: number, idProduto: number, quantidade: number };
 
     if (idCliente === undefined || idProduto === undefined || quantidade === undefined) {
       res.status(400).json({ success: false, message: 'idCliente, idProduto e quantidade são obrigatórios.' });
       return;
     }
+
+     if (!idUsuarioLogado || idUsuarioLogado !== idCliente.toString()) {
+      res.status(403).json({ success: false, message: 'Acesso negado. Você não pode adicionar itens ao carrinho de outro cliente ou o ID do usuário não foi fornecido no cabeçalho.' });
+      return;
+    }
+
 
     if (typeof quantidade !== 'number' || quantidade <= 0) {
       res.status(400).json({ success: false, message: 'Quantidade deve ser um número positivo.' });
