@@ -52,12 +52,12 @@ testConnection()
     if (isConnected) {
       console.log('📊 Pronto para consultas ao banco de dados na nuvem!');
     } else {
-      console.error('🛑 Encerrando aplicação devido a erro de conexão com o banco na nuvem.');
-      process.exit(1); // Encerra se não conseguir conectar
+      console.error('🛑 Problema na conexão com o banco na nuvem. A aplicação pode não funcionar corretamente.');
+      // process.exit(1); // Temporariamente comentado para diagnóstic
     }
   })
   .catch(() => {
     // Este catch é mais para erros inesperados no próprio testConnection
-    console.error('🛑 Erro crítico no processo de teste de conexão.');
-    process.exit(1);
+    console.error('🛑 Erro crítico no processo de teste de conexão. A aplicação pode não funcionar corretamente.');
+    // process.exit(1); // Temporariamente comentado para diagnóstico
   });

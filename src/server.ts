@@ -61,8 +61,8 @@ server.use((err: any, req: express.Request, res: express.Response, next: express
 const PORT = process.env.PORT || CONFIG_SERVER_PORT || 3000;
 
 const EUREKA_SERVER_URL_FALLBACK = 'https://eurekaronaldo-production.up.railway.app/'; // URL do Eureka atualizada
-const eurekaServiceUrl = process.env.EUREKA_URL || EUREKA_SERVER_URL_FALLBACK;
-
+// Garante que não haja barra dupla, removendo a barra final da URL base se existir
+const eurekaBaseUrl = (process.env.EUREKA_URL || EUREKA_SERVER_URL_FALLBACK).replace(/\/$/, '');
 // 2. Configuração do cliente Eureka para Railway e desenvolvimento local
 // TODO: Para produção no Railway, 'hostName' e 'ipAddr' podem precisar ser ajustados
 // para a URL pública ou interna do serviço, dependendo da configuração do Eureka Server.
@@ -99,10 +99,10 @@ const eurekaClient = new Eureka({
     eureka: {
        // Usa a URL completa do Eureka, que é mais robusto
         serviceUrls: {
-            default: [ `${eurekaServiceUrl}/eureka/apps/` ]
+            default: [ `${eurekaBaseUrl}/eureka/apps/` ]
         },
         // Informa ao cliente para usar o protocolo HTTPS se a URL começar com https
-        ssl: eurekaServiceUrl.startsWith('https://'),
+        ssl: eurekaBaseUrl.startsWith('https://'),
     },
 });
 
