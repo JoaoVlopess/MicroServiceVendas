@@ -59,7 +59,7 @@ server.use((err: any, req: express.Request, res: express.Response, next: express
 // Prioriza a porta do ambiente (ex: Railway), depois a do arquivo de config, e por último um padrão.
 const PORT = process.env.PORT || CONFIG_SERVER_PORT || 3000;
 
-const EUREKA_SERVER_URL_FALLBACK = 'https://eurekaronaldo-production-b958.up.railway.app'; // Seu novo fallback
+const EUREKA_SERVER_URL_FALLBACK = 'https://eurekaronaldo-production.up.railway.app/'; // URL do Eureka atualizada
 const eurekaServiceUrl = process.env.EUREKA_URL || EUREKA_SERVER_URL_FALLBACK;
 
 // 2. Configuração do cliente Eureka para Railway e desenvolvimento local
