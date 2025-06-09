@@ -59,31 +59,36 @@ server.use((err: any, req: express.Request, res: express.Response, next: express
 // Prioriza a porta do ambiente (ex: Railway), depois a do arquivo de config, e por último um padrão.
 const PORT = process.env.PORT || CONFIG_SERVER_PORT || 3000;
 
-// 2. Configuração do cliente Eureka
+// 2. Configuração do cliente Eureka para Railway e desenvolvimento local
 // TODO: Para produção no Railway, 'hostName' e 'ipAddr' podem precisar ser ajustados
 // para a URL pública ou interna do serviço, dependendo da configuração do Eureka Server.
 // Por exemplo, usar process.env.RAILWAY_STATIC_URL ou uma variável de ambiente específica.
 const eurekaClient = new Eureka({
     instance: {
         app: 'VENDAS-SERVICE', // Nome exato que aparecerá no painel Eureka
-        hostName: process.env.EUREKA_INSTANCE_HOSTNAME || 'localhost', // Usar variável de ambiente ou localhost
-        ipAddr: process.env.EUREKA_INSTANCE_IPADDR || '127.0.0.1',    // Usar variável de ambiente ou IP local
-        statusPageUrl: `http://${process.env.EUREKA_INSTANCE_HOSTNAME || 'localhost'}:${PORT}/info`, // Opcional
-        healthCheckUrl: `http://${process.env.EUREKA_INSTANCE_HOSTNAME || 'localhost'}:${PORT}/health`, // Opcional
+       // No Railway, RAILWAY_PRIVATE_IP é preferível para comunicação interna entre serviços.
+        // Para hostName, pode ser o RAILWAY_STATIC_URL se o Eureka Server estiver externo e precisar de um nome DNS resolvível,
+        // ou RAILWAY_PRIVATE_IP se o Eureka Server estiver na mesma rede privada.
+        // Se RAILWAY_PRIVATE_IP não estiver disponível (ex: local dev), usa 'localhost'.
+        hostName: process.env.RAILWAY_PRIVATE_IP || 'localhost',
+        ipAddr: process.env.RAILWAY_PRIVATE_IP || '127.0.0.1',
+        statusPageUrl: `http://${process.env.RAILWAY_PRIVATE_IP || 'localhost'}:${PORT}/info`, // Opcional
+        healthCheckUrl: `http://${process.env.RAILWAY_PRIVATE_IP || 'localhost'}:${PORT}/health`, // Opcional
         port: {
-            '$': PORT, // Usa a porta em que o servidor está rodando
+            // A porta é dinamicamente atribuída pelo Railway (process.env.PORT) ou usa a SERVER_PORT definida
+            '$': parseInt(process.env.PORT || CONFIG_SERVER_PORT.toString(), 10),
             '@enabled': true,
         },
         vipAddress: 'vendas-service', // Identificador do serviço
         dataCenterInfo: {
             '@class': 'com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo',
-            name: 'MyOwn', // Ou 'Amazon' se estiver na AWS, etc.
+            name: 'MyOwn', // Pode ser 'Default' ou 'MyOwn' para ambientes não-AWS. 'Amazon' se na AWS.
         },
     },
     eureka: {
-        host: process.env.EUREKA_SERVER_HOST || 'localhost', // Host do Eureka Server (via env var)
-        port: parseInt(process.env.EUREKA_SERVER_PORT || '8761', 10), // Porta do Eureka Server (via env var)
-        servicePath: process.env.EUREKA_SERVICE_PATH || '/eureka/apps/', // Caminho do serviço Eureka (via env var)
+        host: process.env.EUREKA_HOST || 'localhost', // Host do Eureka Server (via env var)
+        port: parseInt(process.env.EUREKA_PORT || '8761', 10), // Porta do Eureka Server (via env var)
+        servicePath: process.env.EUREKA_SERVICE_PATH || '/eureka/apps/', // Caminho padrão do serviço Eureka
     },
 });
 
