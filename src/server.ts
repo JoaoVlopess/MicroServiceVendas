@@ -14,9 +14,10 @@ server.use(helmet());
 
 const allowedOriginsEnv = process.env.CORS_ALLOWED_ORIGINS;
 const localDefaultOrigin = 'http://localhost:5173'; // Para desenvolvimento local
+const vercelFrontendOrigin = 'https://vet-fofinhos-ronaldo.vercel.app'; // Frontend na Vercel
 const railwayInternalDefaultOrigin = 'https://microservicevendas.railway.internal'; // URL interna do Railway
 
-let calculatedOrigins = [localDefaultOrigin, railwayInternalDefaultOrigin];
+let calculatedOrigins = [localDefaultOrigin, vercelFrontendOrigin, railwayInternalDefaultOrigin];
 
 if (allowedOriginsEnv) {
   const envOrigins = allowedOriginsEnv.split(',').map(origin => origin.trim());
@@ -24,7 +25,7 @@ if (allowedOriginsEnv) {
   calculatedOrigins = Array.from(new Set([...calculatedOrigins, ...envOrigins]));
 }
 // Se CORS_ALLOWED_ORIGINS não estiver definida, calculatedOrigins permanece [localDefaultOrigin, railwayInternalDefaultOrigin]
-const allowedOrigins = calculatedOrigins;
+const allowedOrigins = calculatedOrigins; // Agora inclui a Vercel por padrão se não houver env var
 
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
