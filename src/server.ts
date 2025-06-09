@@ -4,6 +4,8 @@ import cors from 'cors';
 import routes from './routes';
 import { SERVER_PORT as CONFIG_SERVER_PORT } from '../config'; // Importar e renomear para clareza
 import './database'; // Importar para garantir que a conexão seja testada na inicialização
+import { Eureka } from 'eureka-js-client';
+
 
 const server = express();
 // const PORT = 3000; // Usaremos SERVER_PORT de config.ts
@@ -57,6 +59,42 @@ server.use((err: any, req: express.Request, res: express.Response, next: express
 // Prioriza a porta do ambiente (ex: Railway), depois a do arquivo de config, e por último um padrão.
 const PORT = process.env.PORT || CONFIG_SERVER_PORT || 3000;
 
+// 2. Configuração do cliente Eureka
+// TODO: Para produção no Railway, 'hostName' e 'ipAddr' podem precisar ser ajustados
+// para a URL pública ou interna do serviço, dependendo da configuração do Eureka Server.
+// Por exemplo, usar process.env.RAILWAY_STATIC_URL ou uma variável de ambiente específica.
+const eurekaClient = new Eureka({
+    instance: {
+        app: 'VENDAS-SERVICE', // Nome exato que aparecerá no painel Eureka
+        hostName: process.env.EUREKA_INSTANCE_HOSTNAME || 'localhost', // Usar variável de ambiente ou localhost
+        ipAddr: process.env.EUREKA_INSTANCE_IPADDR || '127.0.0.1',    // Usar variável de ambiente ou IP local
+        statusPageUrl: `http://${process.env.EUREKA_INSTANCE_HOSTNAME || 'localhost'}:${PORT}/info`, // Opcional
+        healthCheckUrl: `http://${process.env.EUREKA_INSTANCE_HOSTNAME || 'localhost'}:${PORT}/health`, // Opcional
+        port: {
+            '$': PORT, // Usa a porta em que o servidor está rodando
+            '@enabled': true,
+        },
+        vipAddress: 'vendas-service', // Identificador do serviço
+        dataCenterInfo: {
+            '@class': 'com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo',
+            name: 'MyOwn', // Ou 'Amazon' se estiver na AWS, etc.
+        },
+    },
+    eureka: {
+        host: process.env.EUREKA_SERVER_HOST || 'localhost', // Host do Eureka Server (via env var)
+        port: parseInt(process.env.EUREKA_SERVER_PORT || '8761', 10), // Porta do Eureka Server (via env var)
+        servicePath: process.env.EUREKA_SERVICE_PATH || '/eureka/apps/', // Caminho do serviço Eureka (via env var)
+    },
+});
+
 server.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT} em http://localhost:${PORT}`);
+    // 3. Inicia o registro no Eureka e trata possíveis erros
+  eurekaClient.start((error: Error) => {
+      if (error) {
+          console.error('❌ Erro ao registrar no Eureka:', error);
+      } else {
+          console.log('✅ Serviço de Vendas registrado no Eureka com sucesso!');
+      }
+  });
 });
