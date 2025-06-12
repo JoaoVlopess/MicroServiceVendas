@@ -59,8 +59,7 @@ async function obterDetalhesCarrinhoFormatado(connection: PoolConnection | typeo
   return { carrinho, itens: itensFormatados };
 }
 
-// @route   GET /carrinho/:id
-// @desc    Lista todos os produtos no carrinho do usuário
+// GET /carrinho/:id
 export const listarProdutosDoCarrinho = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const idUsuario = parseInt(req.params.id);
 
@@ -99,7 +98,7 @@ export const listarProdutosDoCarrinho = async (req: Request, res: Response, next
   }
 };
 
-// @route   POST /carrinho/adicionar
+// POST /carrinho/adicionar
 export const adicionarProdutoAoCarrinho = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   let connection: PoolConnection | null = null;
   try {
@@ -179,24 +178,15 @@ export const adicionarProdutoAoCarrinho = async (req: Request, res: Response, ne
   }
 };
 
-// @route   POST /carrinho/remover
+// DELETE /carrinho/remover/:idProduto
 export const removerProdutoDoCarrinho = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   let connection: PoolConnection | null = null;
   try {
-    const { idProduto, quantidade: quantidadeParaRemover, idCliente } = req.body as { idProduto: number, quantidade?: number, idCliente?: number };
+    const idProduto = parseInt(req.params.idProduto);
+    const { idCliente } = req.body as { idCliente?: number };
 
-    if (!idCliente || typeof idCliente !== 'number') {
-      res.status(400).json({ success: false, message: 'idCliente deve ser fornecido no corpo da requisição.' });
-      return;
-    }
-
-    if (idProduto === undefined) {
-      res.status(400).json({ success: false, message: 'idProduto é obrigatório.' });
-      return;
-    }
-
-    if (quantidadeParaRemover !== undefined && (typeof quantidadeParaRemover !== 'number' || quantidadeParaRemover <= 0)) {
-      res.status(400).json({ success: false, message: 'Quantidade para remover deve ser um número positivo.' });
+    if (!idCliente || typeof idCliente !== 'number' || isNaN(idProduto)) {
+      res.status(400).json({ success: false, message: 'idCliente e idProduto devem ser fornecidos corretamente.' });
       return;
     }
 
@@ -212,47 +202,92 @@ export const removerProdutoDoCarrinho = async (req: Request, res: Response, next
       res.status(404).json({ success: false, message: 'Carrinho não encontrado para este cliente.' });
       return;
     }
+
     const idCarrinho = carrinhosResult[0].idCarrinho;
 
-    const [itensCarrinho] = await connection.execute<RowDataPacket[] & { quantidade: number }[]>(
-      `SELECT quantidade FROM ItemCarrinho WHERE idCarrinho = ? AND idProduto = ?`,
+    const [produtoNoCarrinho] = await connection.execute<RowDataPacket[]>(
+      `SELECT 1 FROM ItemCarrinho WHERE idCarrinho = ? AND idProduto = ?`,
       [idCarrinho, idProduto]
     );
 
-    if (itensCarrinho.length === 0) {
+    if (produtoNoCarrinho.length === 0) {
       res.status(404).json({ success: false, message: 'Produto não encontrado no carrinho.' });
       return;
     }
 
-    const quantidadeAtual = itensCarrinho[0].quantidade;
-
-    if (quantidadeParaRemover === undefined || quantidadeParaRemover >= quantidadeAtual) {
-      await connection.execute(
-        `DELETE FROM ItemCarrinho WHERE idCarrinho = ? AND idProduto = ?`,
-        [idCarrinho, idProduto]
-      );
-    } else {
-      const novaQuantidade = quantidadeAtual - quantidadeParaRemover;
-      await connection.execute(
-        `UPDATE ItemCarrinho SET quantidade = ? WHERE idCarrinho = ? AND idProduto = ?`,
-        [novaQuantidade, idCarrinho, idProduto]
-      );
-    }
+    await connection.execute(
+      `DELETE FROM ItemCarrinho WHERE idCarrinho = ? AND idProduto = ?`,
+      [idCarrinho, idProduto]
+    );
 
     await atualizarTotalCarrinho(connection, idCarrinho);
 
-    const { carrinho: carrinhoAtualizado, itens: itensFormatados } = await obterDetalhesCarrinhoFormatado(connection, idCarrinho);
+    const { carrinho: carrinhoAtualizado, itens } = await obterDetalhesCarrinhoFormatado(connection, idCarrinho);
 
     await connection.commit();
 
     res.status(200).json({
       success: true,
-      message: 'Produto removido/atualizado do carrinho!',
-      data: carrinhoAtualizado ? { ...carrinhoAtualizado, itens: itensFormatados } : null
+      message: 'Produto removido do carrinho.',
+      data: carrinhoAtualizado ? { ...carrinhoAtualizado, itens } : null
     });
   } catch (err: any) {
     if (connection) await connection.rollback();
     console.error("Erro ao remover produto do carrinho:", err);
+    next(err);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+// DELETE /carrinho/esvaziar
+export const esvaziarCarrinho = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  let connection: PoolConnection | null = null;
+  try {
+    const { idCliente } = req.body as { idCliente?: number };
+
+    if (!idCliente || typeof idCliente !== 'number') {
+      res.status(400).json({ success: false, message: 'idCliente deve ser fornecido no corpo da requisição.' });
+      return;
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [carrinhosResult] = await connection.execute<RowDataPacket[] & { idCarrinho: number }[]>(
+      `SELECT idCarrinho FROM Carrinho WHERE idUsuario = ?`,
+      [idCliente]
+    );
+
+    if (carrinhosResult.length === 0) {
+      res.status(404).json({ success: false, message: 'Carrinho não encontrado para este cliente.' });
+      return;
+    }
+
+    const idCarrinho = carrinhosResult[0].idCarrinho;
+
+    await connection.execute(
+      `DELETE FROM ItemCarrinho WHERE idCarrinho = ?`,
+      [idCarrinho]
+    );
+
+    await connection.execute(
+      `UPDATE Carrinho SET total = 0, dataUltimaModificacao = NOW() WHERE idCarrinho = ?`,
+      [idCarrinho]
+    );
+
+    const { carrinho: carrinhoAtualizado, itens } = await obterDetalhesCarrinhoFormatado(connection, idCarrinho);
+
+    await connection.commit();
+
+    res.status(200).json({
+      success: true,
+      message: 'Carrinho esvaziado com sucesso.',
+      data: carrinhoAtualizado ? { ...carrinhoAtualizado, itens } : null
+    });
+  } catch (err: any) {
+    if (connection) await connection.rollback();
+    console.error("Erro ao esvaziar o carrinho:", err);
     next(err);
   } finally {
     if (connection) connection.release();
