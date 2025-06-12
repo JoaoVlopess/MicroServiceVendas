@@ -16,4 +16,4 @@ router.get('/api/contas/clientes', (req: Request, res: Response) => {
   res.json({ message: 'Endpoint de clientes' });
 });
 
-export { router };
+export default router;
