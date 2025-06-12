@@ -1,10 +1,14 @@
 import { Router } from 'express';
-import { listarProdutos, obterProdutoPorId, criarProduto } from '../controllers/produtoController';
+import {
+  listarProdutos,
+  obterProdutoPorId,
+  criarProduto
+} from '../controllers/produtoController';
 
 const router = Router();
 
-router.get('/', listarProdutos); // Listar cursos pode ser público
-router.get('/:id', obterProdutoPorId);
-router.post('/', criarProduto); // Adicionar rota para criar produto
+router.get('/', listarProdutos);          // Público
+router.get('/:id', obterProdutoPorId);    // Público
+router.post('/', criarProduto);           // Protegido? (Depende de regra de cargo: ADMIN ou GERENTE)
 
 export default router;

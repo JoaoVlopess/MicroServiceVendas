@@ -1,10 +1,15 @@
 import { Router } from 'express';
-import { listarProdutosDoCarrinho, adicionarProdutoAoCarrinho, removerProdutoDoCarrinho } from '../controllers/carrinhoController';
+import {
+  listarProdutosDoCarrinho,
+  adicionarProdutoAoCarrinho,
+  removerProdutoDoCarrinho
+} from '../controllers/carrinhoController';
 
 const router = Router();
- 
-router.get('/:idCliente', listarProdutosDoCarrinho); // Rota para listar produtos do carrinho de um cliente específico
-router.post('/adicionar', adicionarProdutoAoCarrinho); // Rota para adicionar produto ao carrinho
-router.post('/remover', removerProdutoDoCarrinho); // Rota para remover produto do carrinho
+
+// Todas as rotas dependem de autenticação e leitura do cabeçalho X-User-ID
+router.get('/', listarProdutosDoCarrinho);        // Lista os itens do carrinho do usuário autenticado
+router.post('/adicionar', adicionarProdutoAoCarrinho); // Adiciona item ao carrinho do usuário autenticado
+router.post('/remover', removerProdutoDoCarrinho);     // Remove item do carrinho do usuário autenticado
 
 export default router;
