@@ -247,31 +247,37 @@ export const removerProdutoDoCarrinho = async (req: Request, res: Response, next
   }
 };
 
-// DELETE /carrinho/esvaziar
+// DELETE /carrinho/:idCliente/:idCarrinho/esvaziar
 export const esvaziarCarrinho = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   let connection: PoolConnection | null = null;
   try {
-    const { idCliente } = req.body as { idCliente?: number };
+    const idCliente = parseInt(req.params.idCliente);
+    const idCarrinho = parseInt(req.params.idCarrinho);
 
-    if (!idCliente || typeof idCliente !== 'number') {
-      res.status(400).json({ success: false, message: 'idCliente deve ser fornecido no corpo da requisição.' });
+    if (isNaN(idCliente) || isNaN(idCarrinho)) {
+      res.status(400).json({ 
+        success: false, 
+        message: 'idCliente e idCarrinho são obrigatórios e devem ser números válidos' 
+      });
       return;
     }
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
-    const [carrinhosResult] = await connection.execute<RowDataPacket[] & { idCarrinho: number }[]>(
-      `SELECT idCarrinho FROM Carrinho WHERE idUsuario = ?`,
-      [idCliente]
+    // Verificar se o carrinho pertence ao cliente
+    const [carrinhoResult] = await connection.execute<RowDataPacket[] & { idCarrinho: number }[]>(
+      `SELECT idCarrinho FROM Carrinho WHERE idCarrinho = ? AND idUsuario = ?`,
+      [idCarrinho, idCliente]
     );
 
-    if (carrinhosResult.length === 0) {
-      res.status(404).json({ success: false, message: 'Carrinho não encontrado para este cliente.' });
+    if (carrinhoResult.length === 0) {
+      res.status(404).json({ 
+        success: false, 
+        message: 'Carrinho não encontrado ou não pertence ao cliente' 
+      });
       return;
     }
-
-    const idCarrinho = carrinhosResult[0].idCarrinho;
 
     await connection.execute(
       `DELETE FROM ItemCarrinho WHERE idCarrinho = ?`,
