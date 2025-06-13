@@ -153,7 +153,7 @@ export const adicionarProdutoAoCarrinho = async (req: Request, res: Response, ne
     await connection.execute(
       `INSERT INTO ItemCarrinho (idCarrinho, idProduto, quantidade)
        VALUES (?, ?, ?)
-        ON DUPLICATE KEY UPDATE quantidade = quantidade + 1`,
+       ON DUPLICATE KEY UPDATE quantidade = quantidade + 1`,
 
       [idCarrinho, idProduto, quantidade]
     );
