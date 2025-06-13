@@ -179,18 +179,18 @@ export const adicionarProdutoAoCarrinho = async (req: Request, res: Response, ne
   }
 };
 
-// DELETE /carrinho/:idCarrinho/remover/:idProduto
+// DELETE /carrinho/:idCliente/:idCarrinho/remover/:idProduto
 export const removerProdutoDoCarrinho = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   let connection: PoolConnection | null = null;
   try {
+    const idCliente = parseInt(req.params.idCliente);
     const idCarrinho = parseInt(req.params.idCarrinho);
     const idProduto = parseInt(req.params.idProduto);
-    const { idCliente } = req.body as { idCliente?: number };
 
-    if (!idCliente || typeof idCliente !== 'number' || isNaN(idProduto) || isNaN(idCarrinho)) {
+    if (isNaN(idCliente) || isNaN(idCarrinho) || isNaN(idProduto)) {
       res.status(400).json({ 
         success: false, 
-        message: 'idCliente, idCarrinho e idProduto são obrigatórios' 
+        message: 'idCliente, idCarrinho e idProduto são obrigatórios e devem ser números válidos' 
       });
       return;
     }
