@@ -15,7 +15,7 @@ router.get('/:id', listarProdutosDoCarrinho);
 router.post('/adicionar', adicionarProdutoAoCarrinho);
 
 // Remove completamente um item específico do carrinho (idProduto como parâmetro, idCliente no body)
-router.delete('/remover/:idProduto', removerProdutoDoCarrinho);
+router.delete('/:idCarrinho/remover/:idProduto', removerProdutoDoCarrinho);
 
 // Esvazia completamente o carrinho do usuário (idCliente no body)
 router.delete('/esvaziar', esvaziarCarrinho);

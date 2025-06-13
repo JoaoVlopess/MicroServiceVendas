@@ -179,32 +179,38 @@ export const adicionarProdutoAoCarrinho = async (req: Request, res: Response, ne
   }
 };
 
-// DELETE /carrinho/remover/:idProduto
+// DELETE /carrinho/:idCarrinho/remover/:idProduto
 export const removerProdutoDoCarrinho = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   let connection: PoolConnection | null = null;
   try {
+    const idCarrinho = parseInt(req.params.idCarrinho);
     const idProduto = parseInt(req.params.idProduto);
     const { idCliente } = req.body as { idCliente?: number };
 
-    if (!idCliente || typeof idCliente !== 'number' || isNaN(idProduto)) {
-      res.status(400).json({ success: false, message: 'idCliente e idProduto devem ser fornecidos corretamente.' });
+    if (!idCliente || typeof idCliente !== 'number' || isNaN(idProduto) || isNaN(idCarrinho)) {
+      res.status(400).json({ 
+        success: false, 
+        message: 'idCliente, idCarrinho e idProduto são obrigatórios' 
+      });
       return;
     }
 
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
-    const [carrinhosResult] = await connection.execute<RowDataPacket[] & { idCarrinho: number }[]>(
-      `SELECT idCarrinho FROM Carrinho WHERE idUsuario = ?`,
-      [idCliente]
+    // Verificar se o carrinho pertence ao cliente
+    const [carrinhoResult] = await connection.execute<RowDataPacket[] & { idCarrinho: number }[]>(
+      `SELECT idCarrinho FROM Carrinho WHERE idCarrinho = ? AND idUsuario = ?`,
+      [idCarrinho, idCliente]
     );
 
-    if (carrinhosResult.length === 0) {
-      res.status(404).json({ success: false, message: 'Carrinho não encontrado para este cliente.' });
+    if (carrinhoResult.length === 0) {
+      res.status(404).json({ 
+        success: false, 
+        message: 'Carrinho não encontrado ou não pertence ao cliente' 
+      });
       return;
     }
-
-    const idCarrinho = carrinhosResult[0].idCarrinho;
 
     const [produtoNoCarrinho] = await connection.execute<RowDataPacket[]>(
       `SELECT 1 FROM ItemCarrinho WHERE idCarrinho = ? AND idProduto = ?`,
