@@ -115,3 +115,159 @@ export const criarProduto = async (req: Request, res: Response, next: NextFuncti
     if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 };
+
+// @route   PUT /api/produtos/:id
+// @desc    Atualiza um produto existente
+// @access  Private (geralmente requer autenticação de admin/vendedor)
+export const atualizarProduto = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const connection = await pool.getConnection();
+  try {
+    const { id } = req.params;
+    const { nome, preco, tipo, descricao } = req.body as ProdutoBase;
+
+    // Validação básica
+    if (!nome || typeof preco !== 'number' || preco < 0 || !tipo) {
+      res.status(400).json({ 
+        success: false, 
+        message: 'Nome, tipo e um preço válido (número não negativo) são campos obrigatórios.' 
+      });
+      return;
+    }
+
+    if (!['REMEDIO', 'BRINQUEDO', 'RACAO'].includes(tipo)) {
+      res.status(400).json({ 
+        success: false, 
+        message: 'Tipo de produto inválido. Deve ser REMEDIO, BRINQUEDO ou RACAO.' 
+      });
+      return;
+    }
+
+    await connection.beginTransaction();
+
+    // Verificar se o produto existe
+    const [produtoExistente] = await connection.execute<RowDataPacket[] & ProdutoBase[]>(
+      `SELECT id, tipo FROM ProdutoBase WHERE id = ?`,
+      [id]
+    );
+
+    if (produtoExistente.length === 0) {
+      res.status(404).json({ 
+        success: false, 
+        message: 'Produto não encontrado.' 
+      });
+      return;
+    }
+
+    const produtoAtual = produtoExistente[0];
+
+    // Se o tipo mudou, precisamos atualizar as tabelas específicas
+    if (produtoAtual.tipo !== tipo) {
+      // Remover da tabela antiga
+      switch (produtoAtual.tipo) {
+        case 'REMEDIO':
+          await connection.execute('DELETE FROM Remedio WHERE id_produto_base = ?', [id]);
+          break;
+        case 'RACAO':
+          await connection.execute('DELETE FROM Racao WHERE id_produto_base = ?', [id]);
+          break;
+        case 'BRINQUEDO':
+          await connection.execute('DELETE FROM Brinquedo WHERE id_produto_base = ?', [id]);
+          break;
+      }
+
+      // Inserir na nova tabela
+      switch (tipo) {
+        case 'REMEDIO':
+          await connection.execute('INSERT INTO Remedio (id_produto_base) VALUES (?)', [id]);
+          break;
+        case 'RACAO':
+          await connection.execute('INSERT INTO Racao (id_produto_base) VALUES (?)', [id]);
+          break;
+        case 'BRINQUEDO':
+          await connection.execute('INSERT INTO Brinquedo (id_produto_base) VALUES (?)', [id]);
+          break;
+      }
+    }
+
+    // Atualizar a tabela base
+    await connection.execute(
+      `UPDATE ProdutoBase 
+       SET nome = ?, preco = ?, tipo = ?, descricao = ?
+       WHERE id = ?`,
+      [nome, preco, tipo, descricao, id]
+    );
+
+    await connection.commit();
+
+    res.status(200).json({
+      success: true,
+      message: 'Produto atualizado com sucesso!',
+      data: { id: parseInt(id), nome, preco, tipo, descricao }
+    });
+
+  } catch (err: any) {
+    if (connection) await connection.rollback();
+    console.error("Erro ao atualizar produto:", err);
+    next(err);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+// @route   DELETE /api/produtos/:id
+// @desc    Remove um produto
+// @access  Private (geralmente requer autenticação de admin/vendedor)
+export const deletarProduto = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const connection = await pool.getConnection();
+  try {
+    const { id } = req.params;
+
+    await connection.beginTransaction();
+
+    // Verificar se o produto existe e obter seu tipo
+    const [produtoExistente] = await connection.execute<RowDataPacket[] & ProdutoBase[]>(
+      `SELECT id, tipo FROM ProdutoBase WHERE id = ?`,
+      [id]
+    );
+
+    if (produtoExistente.length === 0) {
+      res.status(404).json({ 
+        success: false, 
+        message: 'Produto não encontrado.' 
+      });
+      return;
+    }
+
+    const produto = produtoExistente[0];
+
+    // Remover da tabela específica primeiro
+    switch (produto.tipo) {
+      case 'REMEDIO':
+        await connection.execute('DELETE FROM Remedio WHERE id_produto_base = ?', [id]);
+        break;
+      case 'RACAO':
+        await connection.execute('DELETE FROM Racao WHERE id_produto_base = ?', [id]);
+        break;
+      case 'BRINQUEDO':
+        await connection.execute('DELETE FROM Brinquedo WHERE id_produto_base = ?', [id]);
+        break;
+    }
+
+    // Remover da tabela base
+    await connection.execute('DELETE FROM ProdutoBase WHERE id = ?', [id]);
+
+    await connection.commit();
+
+    res.status(200).json({
+      success: true,
+      message: 'Produto removido com sucesso!'
+    });
+
+  } catch (err: any) {
+    if (connection) await connection.rollback();
+    console.error("Erro ao deletar produto:", err);
+    next(err);
+  } finally {
+    if (connection) connection.release();
+  }
+};
