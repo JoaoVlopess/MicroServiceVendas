@@ -10,6 +10,12 @@ import { Eureka } from 'eureka-js-client';
 const server = express();
 // const PORT = 3000; // Usaremos SERVER_PORT de config.ts
 
+// Adicionar middleware de logging
+server.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
 server.use(helmet());
 
 const allowedOriginsEnv = process.env.CORS_ALLOWED_ORIGINS;
@@ -45,6 +51,11 @@ server.use(cors(corsOptions));
 
 server.use(express.json());
 server.use(express.urlencoded({ extended: true }));
+
+// Adicionar rota de teste
+server.get('/test', (req, res) => {
+  res.json({ message: 'API está funcionando!' });
+});
 
 server.use(routes); // Adicione esta linha para usar suas rotas
 
