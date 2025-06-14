@@ -8,6 +8,7 @@ router.get('/', (req: Request, res: Response) => {
   res.send('API de Vendas está operacional!');
 });
 
+// Registrar as rotas de produtos e carrinho
 router.use('/produtos', produtoRoute);
 router.use('/carrinho', carrinhoRoute);
 

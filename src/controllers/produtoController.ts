@@ -28,24 +28,37 @@ export const listarProdutos = async (req: Request, res: Response, next: NextFunc
 // @desc    Obtém um produto específico pelo seu ID
 // @access  Public
 export const obterProdutoPorId = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const { id } = req.params; // Pega o ID da URL
-
   try {
+    const { id } = req.params;
+    console.log(`🔍 Buscando produto com ID: ${id}`);
+
     const [rows] = await pool.execute<RowDataPacket[] & ProdutoBase[]>(
-      `SELECT id, nome, preco, tipo, descricao FROM ProdutoBase WHERE id = ?`,
-      [id] // Passa o ID como parâmetro para a query, prevenindo SQL Injection
+      `SELECT id, nome, preco, tipo, descricao 
+       FROM ProdutoBase 
+       WHERE id = ?`,
+      [id]
     );
 
-    const produto = rows[0]; // O resultado da query (se houver) estará na primeira posição
+    console.log(`📦 Resultado da busca:`, rows);
+
+    const produto = rows[0];
 
     if (!produto) {
-      res.status(404).json({ success: false, message: 'Produto não encontrado' });
+      console.log(`❌ Produto não encontrado com ID: ${id}`);
+      res.status(404).json({ 
+        success: false, 
+        message: 'Produto não encontrado' 
+      });
       return;
     }
 
-    res.status(200).json({ success: true, data: produto });
+    console.log(`✅ Produto encontrado:`, produto);
+    res.status(200).json({ 
+      success: true, 
+      data: produto 
+    });
   } catch (err: any) {
-    console.error(`Erro ao buscar produto com ID ${id}:`, err);
+    console.error(`❌ Erro ao buscar produto com ID ${req.params.id}:`, err);
     next(err);
   }
 };
